@@ -9,7 +9,7 @@ import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 import torch.optim
 import time
-from cifar10_data import CIFAR10RandomLabels
+from cifar10_data import CIFAR10RandomLabels,CIFAR10RandomPixels,CIFAR10ShufflePixels,CIFAR10GaussianPixels
 
 import cmd_args
 import model_mlp, model_wideresnet, model_inception, model_alexnet
@@ -39,14 +39,23 @@ def get_data_loaders(args, shuffle_train=True):
         normalize
         ])
 
+    if args.task == 'random_label':
+        dataset = CIFAR10RandomLabels
+    elif args.task == 'random_pixel':
+        dataset = CIFAR10RandomPixels
+    elif args.task == 'shuffle_pixel':
+        dataset = CIFAR10ShufflePixels
+    elif args.task == 'gaussian_pixel':
+        dataset = CIFAR10GaussianPixels
+     
     kwargs = {'num_workers': 1, 'pin_memory': True}
     train_loader = torch.utils.data.DataLoader(
-        CIFAR10RandomLabels(root='./data', train=True, download=True,
+        dataset(root='./data', train=True, download=True,
                             transform=transform_train, num_classes=args.num_classes,
                             corrupt_prob=args.label_corrupt_prob),
         batch_size=args.batch_size, shuffle=shuffle_train, **kwargs)
     val_loader = torch.utils.data.DataLoader(
-        CIFAR10RandomLabels(root='./data', train=False,
+        dataset(root='./data', train=False,
                             transform=transform_test, num_classes=args.num_classes,
                             corrupt_prob=args.label_corrupt_prob),
         batch_size=args.batch_size, shuffle=False, **kwargs)
@@ -226,7 +235,10 @@ def setup_logging(args):
 
 def main():
   args = cmd_args.parse_args()
+  if args.steps > 0:
+    args.epochs = int(args.steps * args.batch_size / 50000)
   setup_logging(args)
+  print(args)
 
   if args.command == 'train':
     train_loader, val_loader = get_data_loaders(args, shuffle_train=True)

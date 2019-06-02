@@ -10,6 +10,7 @@ parser.add_argument('--label-corrupt-prob', type=float, default=0.0)
 
 parser.add_argument('--batch-size', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=300)
+parser.add_argument('--steps', type=int, default=20000)
 parser.add_argument('--learning-rate', type=float, default=0.1)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight-decay', type=float, default=0)
@@ -19,6 +20,7 @@ parser.add_argument('--eval-full-trainset', type=bool, default=True,
                     'report the running average of training statistics')
 
 parser.add_argument('--arch', default='wide-resnet', choices=['inception', 'alexnet', 'wide-resnet', 'mlp'])
+parser.add_argument('--task', default='random_label', choices=['random_label', 'random_pixel', 'shuffle_pixel', 'gaussian_pixel'])
 
 parser.add_argument('--wrn-depth', type=int, default=28)
 parser.add_argument('--wrn-widen-factor', type=int, default=1)
@@ -36,6 +38,7 @@ def format_experiment_name(args):
     name += '_'
 
   name += args.data + '_'
+  name += args.task + '_'
   if args.label_corrupt_prob > 0:
     name += 'corrupt%g_' % args.label_corrupt_prob
 
