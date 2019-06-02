@@ -12,8 +12,7 @@ import time
 from cifar10_data import CIFAR10RandomLabels
 
 import cmd_args
-import model_mlp, model_wideresnet
-
+import model_mlp, model_wideresnet, model_inception, model_alexnet
 
 def get_data_loaders(args, shuffle_train=True):
   if args.data == 'cifar10':
@@ -22,18 +21,20 @@ def get_data_loaders(args, shuffle_train=True):
 
     if args.data_augmentation:
       transform_train = transforms.Compose([
-          transforms.RandomCrop(32, padding=4),
+          transforms.RandomCrop(28),
           transforms.RandomHorizontalFlip(),
           transforms.ToTensor(),
           normalize,
           ])
     else:
       transform_train = transforms.Compose([
+          transforms.CenterCrop(28),
           transforms.ToTensor(),
           normalize,
           ])
 
     transform_test = transforms.Compose([
+        transforms.CenterCrop(28),
         transforms.ToTensor(),
         normalize
         ])
@@ -64,9 +65,12 @@ def get_model(args):
   elif args.arch == 'mlp':
     n_units = [int(x) for x in args.mlp_spec.split('x')] # hidden dims
     n_units.append(args.num_classes)  # output dim
-    n_units.insert(0, 32*32*3)        # input dim
+    n_units.insert(0, 28*28*3)        # input dim
     model = model_mlp.MLP(n_units)
-
+  elif args.arch == 'inception':
+    model = model_inception.inception_v3(num_classes = args.num_classes)
+  elif args.arch == 'alexnet':
+    model = model_alexnet.alexnet(num_classes = args.num_classes)
   # for training on multiple GPUs.
   # Use CUDA_VISIBLE_DEVICES=0,1 to specify which GPUs to use
   # model = torch.nn.DataParallel(model).cuda()

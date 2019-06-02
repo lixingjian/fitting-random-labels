@@ -18,10 +18,6 @@ def inception_v3(pretrained=False, progress=True, **kwargs):
     r"""Inception v3 model architecture from
     `"Rethinking the Inception Architecture for Computer Vision" <http://arxiv.org/abs/1512.00567>`_.
 
-    .. note::
-        **Important**: In contrast to the other models the inception_v3 expects tensors with a size of
-        N x 3 x 299 x 299, so ensure your images are sized accordingly.
-
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
@@ -56,28 +52,22 @@ class Inception3(nn.Module):
         super(Inception3, self).__init__()
         self.aux_logits = aux_logits
         self.transform_input = transform_input
-        self.Conv2d_1a_3x3 = BasicConv2d(3, 96, kernel_size=3, stride=1)
-        self.Mixed_2a = InceptionA(96, 32, 32)
-        self.Mixed_2b = InceptionA(32+32, 32, 48)
-        self.Mixed_2c = InceptionB(32+48, 80)
-        self.Mixed_3a = InceptionA(32+48+80, 112, 48)
-        self.Mixed_3b = InceptionA(112+48, 96, 64)
-        self.Mixed_3c = InceptionA(96+64, 80, 80)
-        self.Mixed_3d = InceptionA(80+80, 48, 96)
-        self.Mixed_3e = InceptionB(48+96, 96)
-        self.Mixed_3a = InceptionA(48+96+96, 176, 160)
-        self.Mixed_3b = InceptionA(176+160, 176, 160)
+        self.Conv2d_1a_3x3 = BasicConv2d(3, 96, kernel_size=3, stride=1, padding=1)
+        self.Mixed_2a = Inception(96, 32, 32)
+        self.Mixed_2b = Inception(32+32, 32, 48)
+        self.Mixed_2c = Downsample(32+48, 80)
+        self.Mixed_3a = Inception(32+48+80, 112, 48)
+        self.Mixed_3b = Inception(112+48, 96, 64)
+        self.Mixed_3c = Inception(96+64, 80, 80)
+        self.Mixed_3d = Inception(80+80, 48, 96)
+        self.Mixed_3e = Downsample(48+96, 96)
+        self.Mixed_4a = Inception(48+96+96, 176, 160)
+        self.Mixed_4b = Inception(176+160, 176, 160)
         self.fc = nn.Linear(176+160, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-                import scipy.stats as stats
-                stddev = m.stddev if hasattr(m, 'stddev') else 0.1
-                X = stats.truncnorm(-2, 2, scale=stddev)
-                values = torch.as_tensor(X.rvs(m.weight.numel()), dtype=m.weight.dtype)
-                values = values.view(m.weight.size())
-                with torch.no_grad():
-                    m.weight.copy_(values)
+                nn.init.xavier_uniform_(m.weight)            
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -88,82 +78,54 @@ class Inception3(nn.Module):
             x_ch1 = torch.unsqueeze(x[:, 1], 1) * (0.224 / 0.5) + (0.456 - 0.5) / 0.5
             x_ch2 = torch.unsqueeze(x[:, 2], 1) * (0.225 / 0.5) + (0.406 - 0.5) / 0.5
             x = torch.cat((x_ch0, x_ch1, x_ch2), 1)
-        # N x 3 x 299 x 299
+
         x = self.Conv2d_1a_3x3(x)
-        # N x 32 x 149 x 149
-        x = self.Conv2d_2a_3x3(x)
-        # N x 32 x 147 x 147
-        x = self.Conv2d_2b_3x3(x)
-        # N x 64 x 147 x 147
-        x = F.max_pool2d(x, kernel_size=3, stride=2)
-        # N x 64 x 73 x 73
-        x = self.Conv2d_3b_1x1(x)
-        # N x 80 x 73 x 73
-        x = self.Conv2d_4a_3x3(x)
-        # N x 192 x 71 x 71
-        x = F.max_pool2d(x, kernel_size=3, stride=2)
-        # N x 192 x 35 x 35
-        x = self.Mixed_5b(x)
-        # N x 256 x 35 x 35
-        x = self.Mixed_5c(x)
-        # N x 288 x 35 x 35
-        x = self.Mixed_5d(x)
-        # N x 288 x 35 x 35
-        x = self.Mixed_6a(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6b(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6c(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6d(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6e(x)
-        # N x 768 x 17 x 17
-        if self.training and self.aux_logits:
-            aux = self.AuxLogits(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_7a(x)
-        # N x 1280 x 8 x 8
-        x = self.Mixed_7b(x)
-        # N x 2048 x 8 x 8
-        x = self.Mixed_7c(x)
-        # N x 2048 x 8 x 8
-        # Adaptive average pooling
-        x = F.adaptive_avg_pool2d(x, (1, 1))
-        # N x 2048 x 1 x 1
-        x = F.dropout(x, training=self.training)
-        # N x 2048 x 1 x 1
+        x = self.Mixed_2a(x)
+        x = self.Mixed_2b(x)
+        x = self.Mixed_2c(x)
+        x = self.Mixed_3a(x)
+        x = self.Mixed_3b(x)
+        x = self.Mixed_3c(x)
+        x = self.Mixed_3d(x)
+        x = self.Mixed_3e(x)
+        x = self.Mixed_4a(x)
+        x = self.Mixed_4b(x)
+        x = F.avg_pool2d(x, (7, 7))
         x = x.view(x.size(0), -1)
-        # N x 2048
         x = self.fc(x)
-        # N x 1000 (num_classes)
-        if self.training and self.aux_logits:
-            return _InceptionOuputs(x, aux)
         return x
 
 
-class InceptionA(nn.Module):
+class Inception(nn.Module):
 
     def __init__(self, in_channels, out_channels_k1x1, out_channels_k3x3):
-        super(InceptionA, self).__init__()
+        super(Inception, self).__init__()
         self.branch1x1 = BasicConv2d(in_channels, out_channels_k1x1, kernel_size=1, stride=1)
-        self.branch3x3 = BasicConv2d(in_channels, out_channels_k3x3, kernel_size=3, stride=1)
+        self.branch3x3 = BasicConv2d(in_channels, out_channels_k3x3, kernel_size=3, stride=1, padding=1)
+        self.info = in_channels, out_channels_k1x1, out_channels_k3x3
 
     def forward(self, x):
+        #print(self.info)
+        #print(x.shape)
         branch1x1 = self.branch1x1(x)
         branch3x3 = self.branch3x3(x)
+        #print(branch1x1.shape)
+        #print(branch3x3.shape)
         outputs = [branch1x1, branch3x3]
         return torch.cat(outputs, 1)
 
-class InceptionB(nn.Module):
+class Downsample(nn.Module):
 
     def __init__(self, in_channels, out_channels_k3x3):
-        super(InceptionB, self).__init__()
-        self.branch3x3 = BasicConv2d(in_channels, out_channels_k3x3, kernel_size=3, stride=2)
+        super(Downsample, self).__init__()
+        self.branch3x3 = BasicConv2d(in_channels, out_channels_k3x3, kernel_size=3, stride=2, padding=1)
 
     def forward(self, x):
         branch3x3 = self.branch3x3(x)
-        branch_pool = F.max_pool2d(x, kernel_size=3, stride=2)
+        branch_pool = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
+        #print(x.shape)
+        #print(branch3x3.shape)
+        #print(branch_pool.shape)
         outputs = [branch3x3, branch_pool]
         return torch.cat(outputs, 1)
 
@@ -178,13 +140,3 @@ class BasicConv2d(nn.Module):
         x = self.conv(x)
         x = self.bn(x)
         return F.relu(x, inplace=True)
-self.Mixed_2a
-self.Mixed_2b
-self.Mixed_2c
-self.Mixed_3a
-self.Mixed_3b
-self.Mixed_3c
-self.Mixed_3d
-self.Mixed_3e
-self.Mixed_3a
-self.Mixed_3b
