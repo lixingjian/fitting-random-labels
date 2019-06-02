@@ -8,7 +8,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 import torch.optim
-
+import time
 from cifar10_data import CIFAR10RandomLabels
 
 import cmd_args
@@ -89,6 +89,7 @@ def train_model(args, model, train_loader, val_loader,
   epochs = epochs or args.epochs
 
   for epoch in range(start_epoch, epochs):
+    since = time.time()
     adjust_learning_rate(optimizer, epoch, args)
 
     # train for one epoch
@@ -100,8 +101,9 @@ def train_model(args, model, train_loader, val_loader,
     if args.eval_full_trainset:
       tr_loss, tr_prec1 = validate_epoch(train_loader, model, criterion, epoch, args)
 
-    logging.info('%03d: Acc-tr: %6.2f, Acc-val: %6.2f, L-tr: %6.4f, L-val: %6.4f',
-                 epoch, tr_prec1, val_prec1, tr_loss, val_loss)
+    time_elapsed = time.time() - since
+    logging.info('%03d: Acc-tr: %6.2f, Acc-val: %6.2f, L-tr: %6.4f, L-val: %6.4f, Time: %.0f sec',
+                 epoch, tr_prec1, val_prec1, tr_loss, val_loss, time_elapsed)
 
 
 def train_epoch(train_loader, model, criterion, optimizer, epoch, args):
@@ -125,8 +127,8 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args):
 
     # measure accuracy and record loss
     prec1 = accuracy(output.data, target, topk=(1,))[0]
-    losses.update(loss.data[0], input.size(0))
-    top1.update(prec1[0], input.size(0))
+    losses.update(loss.item(), input.size(0))
+    top1.update(prec1.item(), input.size(0))
 
     # compute gradient and do SGD step
     optimizer.zero_grad()
@@ -157,8 +159,8 @@ def validate_epoch(val_loader, model, criterion, epoch, args):
 
     # measure accuracy and record loss
     prec1 = accuracy(output.data, target, topk=(1,))[0]
-    losses.update(loss.data[0], input.size(0))
-    top1.update(prec1[0], input.size(0))
+    losses.update(loss.item(), input.size(0))
+    top1.update(prec1.item(), input.size(0))
 
   return losses.avg, top1.avg
 

@@ -12,7 +12,7 @@ parser.add_argument('--batch-size', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=300)
 parser.add_argument('--learning-rate', type=float, default=0.1)
 parser.add_argument('--momentum', type=float, default=0.9)
-parser.add_argument('--weight-decay', type=float, default=1e-4)
+parser.add_argument('--weight-decay', type=float, default=0)
 
 parser.add_argument('--eval-full-trainset', type=bool, default=True,
                     help='Whether to re-evaluate the full train set on a fixed model, or simply ' +
