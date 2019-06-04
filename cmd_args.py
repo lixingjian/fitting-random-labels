@@ -7,7 +7,7 @@ parser.add_argument('--data', default='cifar10', choices=['cifar10'])
 parser.add_argument('--num-classes', type=int, default=10)
 parser.add_argument('--data-augmentation', type=bool, default=False)
 parser.add_argument('--label-corrupt-prob', type=float, default=0.0)
-
+parser.add_argument('--save', default='')
 parser.add_argument('--batch-size', type=int, default=128)
 parser.add_argument('--epochs', type=int, default=300)
 parser.add_argument('--steps', type=int, default=20000)
@@ -15,12 +15,12 @@ parser.add_argument('--learning-rate', type=float, default=0.1)
 parser.add_argument('--momentum', type=float, default=0.9)
 parser.add_argument('--weight-decay', type=float, default=0)
 
-parser.add_argument('--eval-full-trainset', type=bool, default=True,
+parser.add_argument('--eval-full-trainset', type=bool, default=False,
                     help='Whether to re-evaluate the full train set on a fixed model, or simply ' +
                     'report the running average of training statistics')
 
 parser.add_argument('--arch', default='wide-resnet', choices=['inception', 'alexnet', 'wide-resnet', 'mlp'])
-parser.add_argument('--task', default='random_label', choices=['random_label', 'random_pixel', 'shuffle_pixel', 'gaussian_pixel'])
+parser.add_argument('--task', default='random_label', choices=['normal', 'random_label', 'random_pixel', 'shuffle_pixel', 'gaussian_pixel'])
 
 parser.add_argument('--wrn-depth', type=int, default=28)
 parser.add_argument('--wrn-widen-factor', type=int, default=1)

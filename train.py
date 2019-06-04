@@ -5,10 +5,13 @@ import logging
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
 import torch.optim
 import time
+import copy
 from cifar10_data import CIFAR10RandomLabels,CIFAR10RandomPixels,CIFAR10ShufflePixels,CIFAR10GaussianPixels
 
 import cmd_args
@@ -47,20 +50,43 @@ def get_data_loaders(args, shuffle_train=True):
         dataset = CIFAR10ShufflePixels
     elif args.task == 'gaussian_pixel':
         dataset = CIFAR10GaussianPixels
-     
+    elif args.task == 'normal':
+        dataset = torchvision.datasets.CIFAR10
+ 
     kwargs = {'num_workers': 1, 'pin_memory': True}
-    train_loader = torch.utils.data.DataLoader(
-        dataset(root='./data', train=True, download=True,
+    if args.task == 'normal':
+        train_set = dataset(root='./data', train=True, download=True,
+                            transform=transform_train)
+        train_loader = torch.utils.data.DataLoader(train_set, 
+            batch_size=args.batch_size, shuffle=shuffle_train, **kwargs)
+        val_loader = torch.utils.data.DataLoader(
+            dataset(root='./data', train=False,
+                            transform=transform_test),
+            batch_size=args.batch_size, shuffle=False, **kwargs)
+        dump_set = dataset(root='./data', train=True, download=True,
+                            transform=transform_train)
+        dump_loader = torch.utils.data.DataLoader(dump_set, 
+            batch_size=args.batch_size, shuffle=False, **kwargs)
+    else:
+        train_set = dataset(root='./data', train=True, download=True,
                             transform=transform_train, num_classes=args.num_classes,
-                            corrupt_prob=args.label_corrupt_prob),
-        batch_size=args.batch_size, shuffle=shuffle_train, **kwargs)
-    val_loader = torch.utils.data.DataLoader(
-        dataset(root='./data', train=False,
+                            corrupt_prob=args.label_corrupt_prob)
+        train_loader = torch.utils.data.DataLoader(train_set, 
+            batch_size=args.batch_size, shuffle=shuffle_train, **kwargs)
+        val_loader = torch.utils.data.DataLoader(
+            dataset(root='./data', train=False,
                             transform=transform_test, num_classes=args.num_classes,
-                            corrupt_prob=args.label_corrupt_prob),
-        batch_size=args.batch_size, shuffle=False, **kwargs)
+                            corrupt_prob=args.label_corrupt_prob), 
+            batch_size=args.batch_size, shuffle=False, **kwargs)
+        dump_set = dataset(root='./data', train=True, download=True,
+                            transform=transform_train, num_classes=args.num_classes,
+                            corrupt_prob=args.label_corrupt_prob)
+        dump_set.train_labels = copy.deepcopy(train_set.train_labels)
+        dump_set.train_data = copy.deepcopy(train_set.train_data) 
+        dump_loader = torch.utils.data.DataLoader(dump_set, 
+            batch_size=args.batch_size, shuffle=False, **kwargs)
 
-    return train_loader, val_loader
+    return train_loader, val_loader, dump_loader
   else:
     raise Exception('Unsupported dataset: {0}'.format(args.data))
 
@@ -88,7 +114,7 @@ def get_model(args):
   return model
 
 
-def train_model(args, model, train_loader, val_loader,
+def train_model(args, model, train_loader, val_loader, dump_loader,
                 start_epoch=None, epochs=None):
   cudnn.benchmark = True
 
@@ -106,8 +132,7 @@ def train_model(args, model, train_loader, val_loader,
     adjust_learning_rate(optimizer, epoch, args)
 
     # train for one epoch
-    tr_loss, tr_prec1 = train_epoch(train_loader, model, criterion, optimizer, epoch, args)
-
+    tr_loss, tr_prec1 = train_epoch(train_loader, dump_loader, model, criterion, optimizer, epoch, args)
     # evaluate on validation set
     val_loss, val_prec1 = validate_epoch(val_loader, model, criterion, epoch, args)
 
@@ -118,8 +143,24 @@ def train_model(args, model, train_loader, val_loader,
     logging.info('%03d: Acc-tr: %6.2f, Acc-val: %6.2f, L-tr: %6.4f, L-val: %6.4f, Time: %.0f sec',
                  epoch, tr_prec1, val_prec1, tr_loss, val_loss, time_elapsed)
 
+def dump_epoch(dump_loader, model, criterion, optimizer, epoch, step, args):
+  #model.train()
+  results = None
+  for i, (input, target) in enumerate(dump_loader):
+    target = target.cuda(async=True)
+    input = input.cuda()
+    input_var = torch.autograd.Variable(input)
+    # compute output
+    output = model(input_var)
+    output = F.softmax(output)
+    output = output.detach().cpu().numpy()
+    if results is None:
+        results = output
+    else:
+        results = np.concatenate((results, output), axis = 0)
+  np.save(('%s/%s_%d_%d.npy' % (args.save, args.task, epoch, step)), results)
 
-def train_epoch(train_loader, model, criterion, optimizer, epoch, args):
+def train_epoch(train_loader, dump_loader, model, criterion, optimizer, epoch, args):
   """Train for one epoch on the training set"""
   batch_time = AverageMeter()
   losses = AverageMeter()
@@ -147,6 +188,8 @@ def train_epoch(train_loader, model, criterion, optimizer, epoch, args):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    if args.save:
+        dump_epoch(dump_loader, model, criterion, optimizer, epoch, i, args)
 
   return losses.avg, top1.avg
 
@@ -241,10 +284,10 @@ def main():
   print(args)
 
   if args.command == 'train':
-    train_loader, val_loader = get_data_loaders(args, shuffle_train=True)
+    train_loader, val_loader, dump_loader = get_data_loaders(args, shuffle_train=True)
     model = get_model(args)
     logging.info('Number of parameters: %d', sum([p.data.nelement() for p in model.parameters()]))
-    train_model(args, model, train_loader, val_loader)
+    train_model(args, model, train_loader, val_loader, dump_loader)
 
 
 if __name__ == '__main__':
