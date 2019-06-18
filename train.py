@@ -188,7 +188,7 @@ def train_epoch(train_loader, dump_loader, model, criterion, optimizer, epoch, a
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    if args.save:
+    if args.save and (i % 10 == 0):
         dump_epoch(dump_loader, model, criterion, optimizer, epoch, i, args)
 
   return losses.avg, top1.avg
