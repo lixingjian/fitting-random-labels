@@ -1,3 +1,5 @@
+Note: I added the random pixel, shuffle pixel, gaussian pixel task to the original implementation.
+
 - [Code organization](#code-organization)
 - [Command examples](#command-examples)
 - [SGD implicit regularization](#sgd-implicit-regularization)
